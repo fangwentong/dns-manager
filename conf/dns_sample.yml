@@ -1,0 +1,52 @@
+accessKey:
+  aliyun:
+    id: L***************
+    secret: 4****************************H
+  namecheap:
+    api_key: 6f917a***********************dab
+    username: your_username
+    ip: "0.0.0.0"
+    sandbox: false # use namecheap sandbox envrionment
+    debug: false  # show debug log
+  cloudflare:
+    email: user@example.com
+    token: 00000000000000000000000000000000
+    certtoken: "v1.0-..."
+
+
+host: &host "10.0.0.1"
+
+dns:
+  - domain: "wentong123.com"
+    vendor: namecheap
+    records:
+      - rr: "@"
+        type: A
+        value: *host
+        ttl: 600
+      - rr: www
+        type: A
+        value: *host
+        ttl: 600
+      - rr: plus
+        type: A
+        value: *host
+        ttl: 600
+      - rr: "*.wire"
+        type: A
+        value: *host
+        ttl: 600
+  - domain: "demo.com"
+    vendor: aliyun
+    records:
+      - rr: blog
+        type: CNAME
+        value: username.gitlab.io.
+        ttl: 60
+  - domain: "demo2.com"
+    vendor: cloudflare
+    records:
+      - rr: blog
+        type: CNAME
+        value: username.gitlab.io.
+        ttl: 60
