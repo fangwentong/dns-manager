@@ -31,8 +31,8 @@ def build_dns_clients(conf):
 
     aliyun_conf = conf.get('aliyun')
     if aliyun_conf is not None:
-        key_id = aliyun_conf.get("id")
-        key_secret = aliyun_conf.get("secret")
+        key_id = aliyun_conf.get('id')
+        key_secret = aliyun_conf.get('secret')
         clients['aliyun'] = AliyunDnsOps(key_id, key_secret)
 
     cloudflare_conf = conf.get('cloudflare')
@@ -73,7 +73,9 @@ def load_and_update_dns_config(cfg_path):
                     if matches_record.value != value:
                         print('try delete old record [{}] {}.{} -> {}'
                               .format(record_type, rr, domain, matches_record.value))
-                        client.delete_domain_record(domain, rr, record_type, matches_record.value)
+                        deleted = client.delete_domain_record(domain, rr, record_type, matches_record.value,
+                                                              record_id=matches_record.id)
+                        print('delete response {}'.format(deleted))
 
                 online_records = client.get_domain_records(domain)
                 matches_records = _find_matches_records(online_records, rr, record_type)

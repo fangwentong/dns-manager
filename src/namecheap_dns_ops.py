@@ -15,7 +15,7 @@ class NamecheapDnsOps:
 
     def _convert_to_dns_record(self, dictRecord):
         record = DnsRecord()
-        record.id = dictRecord['HostId']
+        record.id = str(dictRecord['HostId'])
         record.name = dictRecord['Name']
         record.type = dictRecord['Type']
         record.value = dictRecord['Address']

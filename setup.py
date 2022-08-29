@@ -12,7 +12,7 @@ setup(
     author_email='fangwentong2012@gmail.com',
     license='MIT',
     packages=['dns_manager'],
-    package_dir={"dns_manager": "src"},
+    package_dir={'dns_manager': 'src'},
     zip_safe=False,
     include_package_data=True,
     entry_points={

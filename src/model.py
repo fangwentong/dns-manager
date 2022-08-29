@@ -3,14 +3,14 @@
 
 class DnsRecord:
     id = None
-    name = None
-    type = None
-    value = None
-    ttl = 300
+    name: str
+    type: str
+    value: str
+    ttl: int
 
 
 class CloudflareDnsRecord(DnsRecord):
-    proxiable = None
-    proxied = None
-    zone_id = None
-    zone_name = None
+    proxiable: bool
+    proxied: bool
+    zone_id: str
+    zone_name: str
