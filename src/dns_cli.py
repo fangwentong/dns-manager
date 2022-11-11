@@ -2,13 +2,37 @@
 # coding=utf-8
 
 from __future__ import print_function
+from typing import Callable, Mapping
 
 import sys
 import yaml
-from .namecheap_dns_ops import NamecheapDnsOps
-from .aliyun_dns_ops import AliyunDnsOps
-from .cloudflare_dns_ops import CloudflareDnsOps
+from .namecheap_dns_ops import build_namecheap_dns_client_from_config
+from .aliyun_dns_ops import build_aliyun_dns_client_from_config
+from .cloudflare_dns_ops import build_cloudflare_dns_client_from_config
+from .model import *
 from .utils import remove_suffix
+
+
+class DnsProvider:
+    client = any
+    record_parser = Callable[[dict], DnsRecord]
+
+    def __init__(self, client: any,
+                 record_parser: Callable[[dict], DnsRecord] = parse_dns_record_from_config):
+        self.client = client
+        self.record_parser = record_parser
+
+
+client_factories = {
+    'namecheap': build_namecheap_dns_client_from_config,
+    'aliyun': build_aliyun_dns_client_from_config,
+    'cloudflare': build_cloudflare_dns_client_from_config,
+}
+
+default_record_parser = parse_dns_record_from_config
+record_parsers = {
+    'cloudflare': parse_cloudflare_dns_record_from_config,
+}
 
 
 def load_namecheap_conf(path):
@@ -16,34 +40,14 @@ def load_namecheap_conf(path):
         return yaml.load(fp, Loader=yaml.FullLoader)
 
 
-def build_dns_clients(conf):
-    conf = conf.get('accessKey')
+def build_dns_clients(clients_conf) -> Mapping[str, DnsProvider]:
+    clients_conf = clients_conf.get(CFG_KEY_CLIENTS)
     clients = {}
-
-    namecheap_conf = conf.get('namecheap')
-    if namecheap_conf is not None:
-        api_key = namecheap_conf.get('api_key')
-        username = namecheap_conf.get('username')
-        ip = namecheap_conf.get('ip')
-        sandbox = namecheap_conf.get('sandbox')
-        debug = namecheap_conf.get('debug')
-        clients['namecheap'] = NamecheapDnsOps(api_key, username, ip, sandbox, debug)
-
-    aliyun_conf = conf.get('aliyun')
-    if aliyun_conf is not None:
-        key_id = aliyun_conf.get('id')
-        key_secret = aliyun_conf.get('secret')
-        clients['aliyun'] = AliyunDnsOps(key_id, key_secret)
-
-    cloudflare_conf = conf.get('cloudflare')
-    if cloudflare_conf is not None:
-        # email=None, token=None, certtoken=None, debug=False
-        email = cloudflare_conf.get('email')
-        token = cloudflare_conf.get('token')
-        certtoken = cloudflare_conf.get('certtoken')
-        debug = cloudflare_conf.get('debug')
-        clients['cloudflare'] = CloudflareDnsOps(email, token, certtoken, debug)
-
+    for vendor, factory in client_factories.items():
+        client_conf = clients_conf.get(vendor)
+        if client_conf is not None:
+            record_parser = record_parsers.get(vendor, default_record_parser)
+            clients[vendor] = DnsProvider(client=factory(client_conf), record_parser=record_parser)
     return clients
 
 
@@ -51,35 +55,30 @@ def load_and_update_dns_config(cfg_path):
     dns_conf = load_namecheap_conf(cfg_path)
     clients = build_dns_clients(dns_conf)
 
-    for config in dns_conf.get('dns'):
-        domain = config.get('domain')
-        client = clients[config.get('vendor')]
-        online_records = client.get_domain_records(domain)
-        for record in config.get('records'):
-            rr = record.get('rr')
-            record_type = record.get('type')
-            value = record.get('value')
-            ttl = record.get('ttl')
+    for config in dns_conf.get(CFG_KEY_DNS):
+        domain = config.get(CFG_KEY_DNS_DOMAIN)
+        client = clients[config.get(CFG_KEY_DNS_VENDOR)]
 
-            matches_records = _find_matches_records(online_records, rr, record_type)
+        online_records = client.client.get_domain_records(domain)
+        for r in config.get(CFG_KEY_DNS_RECORDS):
+            record = client.record_parser(r)
+            matches_records = _find_matches_records(online_records, record.name, record.type)
 
             # create record if not exists
-            while not matches_records or not _is_record_value_match(matches_records[0], record_type, value):
-                print('try add record [{}] {}.{} -> {}'.format(record_type, rr, domain, value))
-                print(client.add_domain_record(domain, rr, record_type, value, ttl))
+            while not matches_records or not _is_record_value_match(matches_records[0], record.type, record.value):
+                print('try add record [{}] {}.{} -> {}'.format(record.type, record.name, domain, record.value))
+                print(client.client.add_domain_record(domain, record))
 
                 # delete records no longer needed
                 for matches_record in matches_records:
-                    if matches_record.value != value:
+                    if matches_record.value != record.value:
                         print('try delete old record [{}] {}.{} -> {}'
-                              .format(record_type, rr, domain, matches_record.value))
-                        deleted = client.delete_domain_record(domain, rr, record_type, matches_record.value,
-                                                              record_id=matches_record.id)
-                        print('delete response {}'.format(deleted))
+                              .format(record.type, record.name, domain, matches_record.value))
+                        client.client.delete_domain_record(domain, matches_record)
 
-                online_records = client.get_domain_records(domain)
-                matches_records = _find_matches_records(online_records, rr, record_type)
-            print('status now [{}] {}.{} -> {}'.format(record_type, rr, domain, value))
+                online_records = client.client.get_domain_records(domain)
+                matches_records = _find_matches_records(online_records, record.name, record.type)
+            print('status now [{}] {}.{} -> {}'.format(record.type, record.name, domain, record.value))
 
     print('Done.')
 
@@ -88,15 +87,14 @@ def show_online_config(cfg_path):
     namecheap_conf = load_namecheap_conf(cfg_path)
     clients = build_dns_clients(namecheap_conf)
 
-    for config in namecheap_conf.get('dns'):
-        domain = config.get('domain')
-        client = clients[config.get('vendor')]
-        online_records = client.get_domain_records(domain)
+    for config in namecheap_conf.get(CFG_KEY_DNS):
+        domain = config.get(CFG_KEY_DNS_DOMAIN)
+        client = clients[config.get(CFG_KEY_DNS_VENDOR)]
+        online_records = client.client.get_domain_records(domain)
 
-        for record in config.get('records'):
-            rr = record.get('rr')
-            record_type = record.get('type')
-            _print_matches_records(online_records, domain, rr, record_type)
+        for r in config.get(CFG_KEY_DNS_RECORDS):
+            record = client.record_parser(r)
+            _print_matches_records(online_records, domain, record.name, record.type)
 
     print('End.')
 

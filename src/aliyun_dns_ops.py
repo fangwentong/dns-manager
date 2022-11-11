@@ -3,32 +3,34 @@
 
 import json
 from aliyunsdkcore import client
+from typing import List
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordsRequest import DescribeDomainRecordsRequest
 from aliyunsdkalidns.request.v20150109.UpdateDomainRecordRequest import UpdateDomainRecordRequest
 from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest import AddDomainRecordRequest
-from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordInfoRequest import DescribeDomainRecordInfoRequest
+from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
 from .model import DnsRecord
 
 
 class AliyunDnsOps:
-    def __init__(self, access_key_id, access_key_secret):
-        self.clt = client.AcsClient(access_key_id, access_key_secret, 'cn-hangzhou')
+    def __init__(self, access_key_id, access_key_secret, region_id: str = 'cn-hangzhou'):
+        self.clt = client.AcsClient(access_key_id, access_key_secret, region_id=region_id)
 
-    def get_domain_records(self, domain, rr=None, record_type=None):
+    def get_domain_records(self, domain, rr, record_type) -> List[DnsRecord]:
         page_no = 1
         result = []
         while True:
             res = self._get_domain_records_by_page(domain, rr, record_type, page_no)
             result += res.get('DomainRecords').get('Record')
-            if AliyunDnsOps.no_more(res):
+            if self.no_more(res):
                 break
             page_no = page_no + 1
         return [self._convert_to_dns_record(record) for record in result]
 
-    def _convert_to_dns_record(self, dict_record):
+    @staticmethod
+    def _convert_to_dns_record(dict_record) -> DnsRecord:
         record = DnsRecord()
-        record.id = str(dict_record['RecordId'])
+        record.id = dict_record['RecordId']
         record.name = dict_record['RR']
         record.type = dict_record['Type']
         record.value = dict_record['Value']
@@ -63,27 +65,33 @@ class AliyunDnsOps:
 
     def modify_domain_record(self, record_id, rr, record_type, value):
         request = UpdateDomainRecordRequest()
-        request.set_Value(value)
         request.set_RecordId(record_id)
-        request.set_accept_format('JSON')
         request.set_RR(rr)
         request.set_Type(record_type)
+        request.set_Value(value)
+        request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 
-    def add_domain_record(self, domain, rr, record_type, value, ttl=300):
+    def add_domain_record(self, domain, record: DnsRecord):
         request = AddDomainRecordRequest()
-        if ttl is not None:
-            request.set_TTL(ttl)
-        request.set_Type(record_type)
-        request.set_RR(rr)
-        request.set_Value(value)
+        if record.ttl is not None:
+            request.set_TTL(record.ttl)
+        request.set_Type(record.type)
+        request.set_RR(record.name)
+        request.set_Value(record.value)
         request.set_DomainName(domain)
         request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 
-    def delete_domain_record(self, record_id=None):
+    def delete_domain_record(self, domain, record: DnsRecord):
         request = DeleteDomainRecordRequest()
-        if record_id is None:
-            raise "record_id not specified."
-        request.set_RecordId(record_id)
+        request.set_DomainName(domain)
+        request.set_RecordId(record.id)
+        request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
+
+
+def build_aliyun_dns_client_from_config(config: dict) -> AliyunDnsOps:
+    key_id = config.get('id')
+    key_secret = config.get('secret')
+    return AliyunDnsOps(key_id, key_secret)
