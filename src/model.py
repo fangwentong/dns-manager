@@ -20,9 +20,9 @@ CFG_KEY_DNS_RECORD_CF_PRIORITY = 'priority'
 
 class DnsRecord:
     id = None
-    name:str
-    type:str
-    value:int
+    name: str
+    type: str
+    value: int
     ttl = 300
 
     def __init__(self, id=None, name=None, type=None, value=None, ttl=None):
@@ -31,6 +31,9 @@ class DnsRecord:
         self.type = type
         self.value = value
         self.ttl = ttl
+
+    def sprint_with_domain(self, domain: str) -> str:
+        return '[{}] {}.{} -> {} TTL {}'.format(self.type, self.name, domain, self.value, self.ttl)
 
 
 def parse_dns_record_from_config(config: dict) -> DnsRecord:
@@ -45,11 +48,11 @@ class CloudflareDnsRecord(DnsRecord):
     """
     DNS record type for CloudFlare DNS
     """
-    proxiable:bool
-    proxied:bool
-    priority = None
-    zone_id :str
-    zone_name :str
+    proxiable: bool
+    proxied: bool
+    priority = int
+    zone_id: str
+    zone_name: str
 
     def __init__(self, id=None, name=None, type=None, value=None, ttl=None, proxiable=None,
                  proxied=None, priority=None, zone_id=None, zone_name=None):
@@ -59,6 +62,10 @@ class CloudflareDnsRecord(DnsRecord):
         self.priority = priority
         self.zone_id = zone_id
         self.zone_name = zone_name
+
+    def sprint_with_domain(self, domain: str) -> str:
+        return '[{}] {}.{} -> {} TTL {}{}'.format(self.type, self.name, domain, self.value, self.ttl,
+                                                  ' [proxied]' if self.proxied else '')
 
 
 def parse_cloudflare_dns_record_from_config(config: dict) -> CloudflareDnsRecord:

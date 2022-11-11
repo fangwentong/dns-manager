@@ -50,3 +50,4 @@ dns:
         type: CNAME
         value: username.gitlab.io.
         ttl: 60
+        proxied: true

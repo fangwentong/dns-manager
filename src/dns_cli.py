@@ -2,7 +2,7 @@
 # coding=utf-8
 
 from __future__ import print_function
-from typing import Callable, Mapping
+from typing import Callable, Mapping, List
 
 import sys
 import yaml
@@ -63,22 +63,33 @@ def load_and_update_dns_config(cfg_path):
         for r in config.get(CFG_KEY_DNS_RECORDS):
             record = client.record_parser(r)
             matches_records = _find_matches_records(online_records, record.name, record.type)
+            same_name_records = _find_matches_records(online_records, record.name)
 
             # create record if not exists
-            while not matches_records or not _is_record_value_match(matches_records[0], record.type, record.value):
-                print('try add record [{}] {}.{} -> {}'.format(record.type, record.name, domain, record.value))
+            if not matches_records or any(
+                    not _is_record_value_match(r, record.type, record.value) for r in matches_records):
+                reserve_set = [record.value]
+                for same_name_record in same_name_records:
+                    if has_conflict(same_name_record, record):
+                        print('try delete old record due to conflict {}'
+                              .format(same_name_record.sprint_with_domain(domain)))
+                        client.client.delete_domain_record(domain, same_name_record)
+                        if record.type == same_name_record.type:
+                            reserve_set.append(same_name_record.value)
+
+                print('try add record {}'.format(record.sprint_with_domain(domain)))
                 print(client.client.add_domain_record(domain, record))
 
                 # delete records no longer needed
                 for matches_record in matches_records:
-                    if matches_record.value != record.value:
-                        print('try delete old record [{}] {}.{} -> {}'
-                              .format(record.type, record.name, domain, matches_record.value))
+                    if matches_record.value not in reserve_set:
+                        print('try delete old record {}'.format(matches_record.sprint_with_domain(domain)))
                         client.client.delete_domain_record(domain, matches_record)
 
                 online_records = client.client.get_domain_records(domain)
                 matches_records = _find_matches_records(online_records, record.name, record.type)
-            print('status now [{}] {}.{} -> {}'.format(record.type, record.name, domain, record.value))
+                same_name_records = _find_matches_records(online_records, record.name)
+            print('status now {}'.format(record.sprint_with_domain(domain)))
 
     print('Done.')
 
@@ -105,12 +116,19 @@ def _print_matches_records(records, domain, rr, record_type):
         print('status now [{}] {}.{} -> nil'.format(record_type, rr, domain))
 
     for record in matches_records:
-        print('status now [{}] {}.{} -> {} TTL: {}s'
-              .format(record_type, rr, domain, record.value, record.ttl))
+        print('status now {}'.format(record.sprint_with_domain(domain)))
 
 
-def _find_matches_records(records, rr, record_type):
-    return [record for record in records if record.type == record_type and record.name == rr]
+def has_conflict(old_record: DnsRecord, new_record: DnsRecord) -> bool:
+    if new_record.type == 'CNAME':
+        return old_record.type in ['CNAME', 'A', 'AAAA']
+    elif new_record.type in ['A', 'AAAA']:
+        return old_record.type == 'CNAME'
+    return new_record.type == old_record.type and new_record.value == old_record.value
+
+
+def _find_matches_records(records, rr, record_type=None) -> List[DnsRecord]:
+    return [record for record in records if record.name == rr and (record_type is None or record.type == record_type)]
 
 
 def _is_record_value_match(record, record_type, value):
