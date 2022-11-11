@@ -34,7 +34,12 @@ dns:
         ttl: 600
       - rr: "*.wire"
         type: A
-        value: *host
+        value:
+          - 10.0.1.1
+          - 10.0.2.1
+          - 10.0.3.1
+          - 10.0.4.1
+          - *host
         ttl: 600
   - domain: "demo.com"
     vendor: aliyun

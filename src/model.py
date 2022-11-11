@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding=utf-8
-
+import typing
+from typing import List
 
 CFG_KEY_CLIENTS = 'clients'
 
@@ -20,10 +21,10 @@ CFG_KEY_DNS_RECORD_CF_PRIORITY = 'priority'
 
 class DnsRecord:
     id = None
-    name: str
-    type: str
-    value: int
-    ttl = 300
+    name = str
+    type = str
+    value = str
+    ttl = int
 
     def __init__(self, id=None, name=None, type=None, value=None, ttl=None):
         self.id = id
@@ -36,12 +37,13 @@ class DnsRecord:
         return '[{}] {}.{} -> {} TTL {}'.format(self.type, self.name, domain, self.value, self.ttl)
 
 
-def parse_dns_record_from_config(config: dict) -> DnsRecord:
+def parse_dns_record_from_config(config: dict) -> List[DnsRecord]:
     name = config[CFG_KEY_DNS_RECORD_RR]
     type = config[CFG_KEY_DNS_RECORD_TYPE]
-    value = config[CFG_KEY_DNS_RECORD_VALUE]
+    raw_values = config[CFG_KEY_DNS_RECORD_VALUE]
+    values = raw_values if isinstance(raw_values, List) else [raw_values]
     ttl = config.get(CFG_KEY_DNS_RECORD_TTL)
-    return DnsRecord(name=name, type=type, value=value, ttl=ttl)
+    return [DnsRecord(name=name, type=type, value=value, ttl=ttl) for value in values]
 
 
 class CloudflareDnsRecord(DnsRecord):
@@ -68,10 +70,10 @@ class CloudflareDnsRecord(DnsRecord):
                                                   ' [proxied]' if self.proxied else '')
 
 
-def parse_cloudflare_dns_record_from_config(config: dict) -> CloudflareDnsRecord:
-    record = parse_dns_record_from_config(config)
+def parse_cloudflare_dns_record_from_config(config: dict) -> List[CloudflareDnsRecord]:
+    records = parse_dns_record_from_config(config)
     proxied = config.get(CFG_KEY_DNS_RECORD_CF_PROXIED)
     priority = config.get(CFG_KEY_DNS_RECORD_CF_PRIORITY)
-    return CloudflareDnsRecord(id=record.id, name=record.name, type=record.type,
-                               value=record.value, ttl=record.ttl,
-                               proxied=proxied, priority=priority)
+    return [CloudflareDnsRecord(id=record.id, name=record.name, type=record.type,
+                                value=record.value, ttl=record.ttl,
+                                proxied=proxied, priority=priority) for record in records]

@@ -15,10 +15,10 @@ from .utils import remove_suffix
 
 class DnsProvider:
     client = any
-    record_parser = Callable[[dict], DnsRecord]
+    record_parser = Callable[[dict], List[DnsRecord]]
 
     def __init__(self, client: any,
-                 record_parser: Callable[[dict], DnsRecord] = parse_dns_record_from_config):
+                 record_parser: Callable[[dict], List[DnsRecord]] = parse_dns_record_from_config):
         self.client = client
         self.record_parser = record_parser
 
@@ -61,35 +61,36 @@ def load_and_update_dns_config(cfg_path):
 
         online_records = client.client.get_domain_records(domain)
         for r in config.get(CFG_KEY_DNS_RECORDS):
-            record = client.record_parser(r)
-            matches_records = _find_matches_records(online_records, record.name, record.type)
-            same_name_records = _find_matches_records(online_records, record.name)
+            records = client.record_parser(r)
+            values = [r.value for r in records]
+            reserve_set = values.copy()
 
             # create record if not exists
-            if not matches_records or any(
-                    not _is_record_value_match(r, record.type, record.value) for r in matches_records):
-                reserve_set = [record.value]
-                for same_name_record in same_name_records:
-                    if has_conflict(same_name_record, record):
-                        print('try delete old record due to conflict {}'
-                              .format(same_name_record.sprint_with_domain(domain)))
-                        client.client.delete_domain_record(domain, same_name_record)
-                        if record.type == same_name_record.type:
-                            reserve_set.append(same_name_record.value)
-
-                print('try add record {}'.format(record.sprint_with_domain(domain)))
-                print(client.client.add_domain_record(domain, record))
-
-                # delete records no longer needed
-                for matches_record in matches_records:
-                    if matches_record.value not in reserve_set:
-                        print('try delete old record {}'.format(matches_record.sprint_with_domain(domain)))
-                        client.client.delete_domain_record(domain, matches_record)
-
-                online_records = client.client.get_domain_records(domain)
+            for record in records:
                 matches_records = _find_matches_records(online_records, record.name, record.type)
                 same_name_records = _find_matches_records(online_records, record.name)
-            print('status now {}'.format(record.sprint_with_domain(domain)))
+                if not any(_is_record_value_match_any(r, record.type, record.value) for r in matches_records):
+                    for same_name_record in same_name_records:
+                        if has_conflict(same_name_record, record):
+                            print('try delete old record due to conflict {}'
+                                  .format(same_name_record.sprint_with_domain(domain)))
+                            client.client.delete_domain_record(domain, same_name_record)
+                            if record.type == same_name_record.type:
+                                reserve_set.append(same_name_record.value)
+                    print('try add record {}'.format(record.sprint_with_domain(domain)))
+                    print(client.client.add_domain_record(domain, record))
+                print('status now {}'.format(record.sprint_with_domain(domain)))
+
+            # delete record which record's value not present at config file
+            for record in records:
+                matches_records = _find_matches_records(online_records, record.name, record.type)
+                if any(not _is_record_value_match_any(r, record.type, values) for r in matches_records):
+                    # delete records no longer needed
+                    for matches_record in matches_records:
+                        if matches_record.value not in reserve_set:
+                            print('try delete old record {}'.format(matches_record.sprint_with_domain(domain)))
+                            client.client.delete_domain_record(domain, matches_record)
+                    online_records = client.client.get_domain_records(domain)
 
     print('Done.')
 
@@ -105,7 +106,7 @@ def show_online_config(cfg_path):
 
         for r in config.get(CFG_KEY_DNS_RECORDS):
             record = client.record_parser(r)
-            _print_matches_records(online_records, domain, record.name, record.type)
+            _print_matches_records(online_records, domain, record[0].name, record[0].type)
 
     print('End.')
 
@@ -131,11 +132,11 @@ def _find_matches_records(records, rr, record_type=None) -> List[DnsRecord]:
     return [record for record in records if record.name == rr and (record_type is None or record.type == record_type)]
 
 
-def _is_record_value_match(record, record_type, value):
-    if record.value == value:
+def _is_record_value_match_any(record: DnsRecord, record_type: str, values: List[str]):
+    if record.value in values:
         return True
     if record_type == 'CNAME':
-        return remove_suffix(record.value, '.') == remove_suffix(value, '.')
+        return any(remove_suffix(record.value, '.') == remove_suffix(value, '.') for value in values)
     return False
 
 
