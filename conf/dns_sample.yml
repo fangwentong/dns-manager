@@ -41,6 +41,11 @@ dns:
           - 10.0.4.1
           - *host
         ttl: 600
+      - rr: mail
+        type: MX
+        value: 10.0.1.1
+        ttl: 360
+        mx_pref: 10
   - domain: "demo.com"
     vendor: aliyun
     records:

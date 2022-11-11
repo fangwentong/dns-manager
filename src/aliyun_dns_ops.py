@@ -63,12 +63,13 @@ class AliyunDnsOps:
         desc_record_req.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(desc_record_req))
 
-    def modify_domain_record(self, record_id, rr, record_type, value):
+    # https://help.aliyun.com/document_detail/29774.html
+    def update_domain_record(self, domain: str, record: DnsRecord):
         request = UpdateDomainRecordRequest()
-        request.set_RecordId(record_id)
-        request.set_RR(rr)
-        request.set_Type(record_type)
-        request.set_Value(value)
+        request.set_RecordId(record.id)
+        request.set_RR(record.name)
+        request.set_Type(record.type)
+        request.set_Value(record.value)
         request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 

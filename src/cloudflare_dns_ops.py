@@ -48,7 +48,7 @@ class CloudflareDnsOps:
         record.value = dict_record.get('content')
         record.ttl = dict_record.get('ttl')
         record.proxiable = dict_record.get('proxiable')
-        record.proxied = dict_record.get('proxied')
+        record.proxied = dict_record.get('proxied', False)
         record.priority = dict_record.get('priority')
         record.zone_id = dict_record.get('zone_id')
         record.zone_name = dict_record.get('zone_name')

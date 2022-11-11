@@ -31,6 +31,7 @@ client_factories = {
 
 default_record_parser = parse_dns_record_from_config
 record_parsers = {
+    'namecheap': parse_namecheap_dns_record_from_config,
     'cloudflare': parse_cloudflare_dns_record_from_config,
 }
 
@@ -69,8 +70,12 @@ def load_and_update_dns_config(cfg_path):
             for record in records:
                 matches_records = _find_matches_records(online_records, record.name, record.type)
                 same_name_records = _find_matches_records(online_records, record.name)
-                if not any(_is_record_value_match_any(r, record.type, record.value) for r in matches_records):
-                    for same_name_record in same_name_records:
+
+                value_match_record = next(
+                    (r for r in matches_records if _is_record_value_match_any(r, record.type, record.value)), None)
+
+                if value_match_record is None:  # value not exist, create it
+                    for same_name_record in same_name_records:  # resolve conflict record first
                         if has_conflict(same_name_record, record):
                             print('try delete old record due to conflict {}'
                                   .format(same_name_record.sprint_with_domain(domain)))
@@ -79,6 +84,11 @@ def load_and_update_dns_config(cfg_path):
                                 reserve_set.append(same_name_record.value)
                     print('try add record {}'.format(record.sprint_with_domain(domain)))
                     print(client.client.add_domain_record(domain, record))
+                elif not value_match_record.matches(record):
+                    print('try update record {} => {}'.format(value_match_record.sprint_with_domain(domain),
+                                                              record.sprint_with_domain(domain)))
+                    print(client.client.update_domain_record(domain, record))
+
                 print('status now {}'.format(record.sprint_with_domain(domain)))
 
             # delete record which record's value not present at config file
@@ -129,7 +139,8 @@ def has_conflict(old_record: DnsRecord, new_record: DnsRecord) -> bool:
 
 
 def _find_matches_records(records, rr, record_type=None) -> List[DnsRecord]:
-    return [record for record in records if record.name == rr and (record_type is None or record.type == record_type)]
+    return [record for record in records if record.name == rr
+            and (record_type is None or record.type == record_type)]
 
 
 def _is_record_value_match_any(record: DnsRecord, record_type: str, values: List[str]):
