@@ -2,8 +2,8 @@
 # coding=utf-8
 
 import CloudFlare
-from .model import CloudflareDnsRecord
-from .utils import remove_suffix
+from dnsmanager.model import CloudflareDnsRecord, DnsManipulationException
+from dnsmanager.utils import remove_suffix
 from typing import List
 
 
@@ -63,7 +63,7 @@ class CloudflareDnsOps:
         params = {'name': domain}
         zones = self.cf.zones.get(params=params)
         if len(zones) == 0:
-            raise 'zone not found for domain {}'.format(domain)
+            raise DnsManipulationException('zone not found for domain {}'.format(domain))
         return zones[0]['id']
 
     # https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record
@@ -87,9 +87,9 @@ class CloudflareDnsOps:
         if record.id is None:
             records = self.get_domain_records(domain, CloudflareDnsRecord(name=record.name, zone_id=record.zone_id))
             if len(records) == 0:
-                raise 'record not exist for {}.{}'.format(record.name, domain)
+                raise DnsManipulationException('record not exist for {}.{}'.format(record.name, domain))
             if len(records) > 1:
-                raise 'multiple records for {}.{}'.format(record.name, domain)
+                raise DnsManipulationException('multiple records for {}.{}'.format(record.name, domain))
             record.id = records[0].id
         data = {
             'type': record.type,
@@ -110,14 +110,13 @@ class CloudflareDnsOps:
 
         records = self.get_domain_records(domain, record)
         if len(records) == 0:
-            raise 'delete failed: record {} not exist for domain {}'.format(record, domain)
+            raise DnsManipulationException('delete failed: record {} not exist for domain {}'.format(record, domain))
         if len(records) > 1:
-            raise 'delete failed: multiple records for {} in domain {}'.format(record, domain)
+            raise DnsManipulationException('delete failed: multiple records for {} in domain {}'.format(record, domain))
         return self.cf.zones.dns_records.delete(record.zone_id, records[0].id)
 
 
 def build_cloudflare_dns_client_from_config(config: dict) -> CloudflareDnsOps:
-    # email=None, token=None, certtoken=None, debug=False
     email = config.get('email')
     token = config.get('token')
     certtoken = config.get('certtoken')

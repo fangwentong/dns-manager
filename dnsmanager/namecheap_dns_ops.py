@@ -2,7 +2,7 @@
 # coding=utf-8
 
 from namecheap import Api
-from .model import NamecheapDnsRecord
+from dnsmanager.model import NamecheapDnsRecord
 from typing import List
 
 
