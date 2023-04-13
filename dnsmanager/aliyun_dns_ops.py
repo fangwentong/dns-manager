@@ -9,7 +9,7 @@ from aliyunsdkalidns.request.v20150109.UpdateDomainRecordRequest import UpdateDo
 from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest import AddDomainRecordRequest
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordInfoRequest import DescribeDomainRecordInfoRequest
 from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
-from .model import DnsRecord
+from dnsmanager.model import DnsRecord
 
 
 class AliyunDnsOps:
