@@ -38,10 +38,10 @@ class CloudflareDnsOps:
             params['proxied'] = record.proxied
 
         dns_records = self.cf.zones.dns_records.get(record.zone_id, params=params)
-        return [self._convert_resp_to_dns_record(record) for record in dns_records]
+        return [self._convert_resp_to_dns_record(domain, record) for record in dns_records]
 
     @staticmethod
-    def _convert_resp_to_dns_record(dict_record: dict) -> CloudflareDnsRecord:
+    def _convert_resp_to_dns_record(domain:str, dict_record: dict) -> CloudflareDnsRecord:
         record = CloudflareDnsRecord()
         record.id = dict_record.get('id')
         record.type = dict_record.get('type')
@@ -53,8 +53,8 @@ class CloudflareDnsOps:
         record.zone_id = dict_record.get('zone_id')
         record.zone_name = dict_record.get('zone_name')
 
-        record_name = remove_suffix(dict_record['name'], '.' + record.zone_name)
-        if record_name == record.zone_name:
+        record_name = remove_suffix(dict_record['name'], '.' + domain)
+        if record_name == domain:
             record_name = '@'
         record.name = record_name
         return record

@@ -18,5 +18,5 @@ setup(
     entry_points={
         'console_scripts': ['dns-manager=dnsmanager.dns_cli:main']
     },
-    install_requires=['PyNamecheap==0.0.3', 'aliyun-python-sdk-alidns==2.0.6', 'cloudflare==2.8.15', 'PyYAML==5.4']
+    install_requires=['PyNamecheap==0.0.3', 'aliyun-python-sdk-alidns==2.0.6', 'cloudflare==2.8.15', 'PyYAML==6.0.2']
 )
