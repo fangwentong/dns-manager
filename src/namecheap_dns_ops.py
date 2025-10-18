@@ -4,12 +4,14 @@
 from namecheap import Api
 from .model import NamecheapDnsRecord
 from typing import List
+from .utils import log_api_call
 
 
 class NamecheapDnsOps:
     def __init__(self, api_key, username, ip_address, sandbox, debug):
         self.api = Api(username, api_key, username, ip_address, sandbox=sandbox, debug=debug)
 
+    @log_api_call
     def get_domain_records(self, domain: str) -> List[NamecheapDnsRecord]:
         records = self.api.domains_dns_getHosts(domain)
         return [self._convert_to_dns_record(record) for record in records]
@@ -26,6 +28,7 @@ class NamecheapDnsOps:
         return record
 
     # https://www.namecheap.com/support/api/methods/domains-dns/set-hosts/
+    @log_api_call
     def add_domain_record(self, domain: str, record: NamecheapDnsRecord):
         data = {
             'RecordType': record.type,
@@ -36,6 +39,7 @@ class NamecheapDnsOps:
         }
         return self.api.domains_dns_addHost(domain, data)
 
+    @log_api_call
     def update_domain_record(self, domain: str, record: NamecheapDnsRecord):
         host_records_remote = self.api.domains_dns_getHosts(domain)
 
@@ -60,6 +64,7 @@ class NamecheapDnsOps:
         })
         return self.api.domains_dns_setHosts(domain, host_records_new)
 
+    @log_api_call
     def delete_domain_record(self, domain, record: NamecheapDnsRecord):
         data = {
             'RecordType': record.type,

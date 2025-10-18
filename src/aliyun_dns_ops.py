@@ -10,6 +10,7 @@ from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest import AddDomainRe
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordInfoRequest import DescribeDomainRecordInfoRequest
 from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
 from .model import DnsRecord
+from .utils import log_api_call
 
 
 class AliyunDnsOps:
@@ -37,6 +38,7 @@ class AliyunDnsOps:
         record.ttl = dict_record['TTL']
         return record
 
+    @log_api_call
     def _get_domain_records_by_page(self, domain, rr, record_type, page_no):
         desc_domain_req = DescribeDomainRecordsRequest()
         desc_domain_req.set_DomainName(domain)
@@ -57,6 +59,7 @@ class AliyunDnsOps:
         current_page_size = len(desc_domain_res.get('DomainRecords').get('Record'))
         return total_count <= (page_number - 1) * page_size + current_page_size
 
+    @log_api_call
     def desc_domain_record(self, record_id):
         desc_record_req = DescribeDomainRecordInfoRequest()
         desc_record_req.set_RecordId(record_id)
@@ -64,6 +67,7 @@ class AliyunDnsOps:
         return json.loads(self.clt.do_action_with_exception(desc_record_req))
 
     # https://help.aliyun.com/document_detail/29774.html
+    @log_api_call
     def update_domain_record(self, domain: str, record: DnsRecord):
         request = UpdateDomainRecordRequest()
         request.set_RecordId(record.id)
@@ -73,6 +77,7 @@ class AliyunDnsOps:
         request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 
+    @log_api_call
     def add_domain_record(self, domain, record: DnsRecord):
         request = AddDomainRecordRequest()
         if record.ttl is not None:
@@ -84,6 +89,7 @@ class AliyunDnsOps:
         request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 
+    @log_api_call
     def delete_domain_record(self, domain, record: DnsRecord):
         request = DeleteDomainRecordRequest()
         request.set_DomainName(domain)
