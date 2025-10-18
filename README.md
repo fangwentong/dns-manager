@@ -6,7 +6,12 @@ configurations from a local file and update the DNS records on the name server.
 
 ## Install
 
-This program requires Python 3. Install this program by running:
+This program requires Python 3.
+
+
+### From GitHub (Latest)
+
+To install the latest development version directly from GitHub, run:
 
 ```
 pip install https://github.com/fangwentong/dns-manager/archive/master.zip
