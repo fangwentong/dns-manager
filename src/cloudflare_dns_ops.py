@@ -3,7 +3,7 @@
 
 import CloudFlare
 from .model import CloudflareDnsRecord
-from .utils import remove_suffix
+from .utils import remove_suffix, log_api_call
 from typing import List
 
 
@@ -12,6 +12,7 @@ class CloudflareDnsOps:
     def __init__(self, email=None, token=None, certtoken=None, debug=False):
         self.cf = CloudFlare.CloudFlare(email=email, token=token, certtoken=certtoken, debug=debug)
 
+    @log_api_call
     def get_domain_records(self, domain: str, record: CloudflareDnsRecord = None) -> List[CloudflareDnsRecord]:
         if record is None:
             record = CloudflareDnsRecord()
@@ -38,10 +39,10 @@ class CloudflareDnsOps:
             params['proxied'] = record.proxied
 
         dns_records = self.cf.zones.dns_records.get(record.zone_id, params=params)
-        return [self._convert_resp_to_dns_record(record) for record in dns_records]
+        return [self._convert_resp_to_dns_record(record, domain) for record in dns_records]
 
     @staticmethod
-    def _convert_resp_to_dns_record(dict_record: dict) -> CloudflareDnsRecord:
+    def _convert_resp_to_dns_record(dict_record: dict, domain: str) -> CloudflareDnsRecord:
         record = CloudflareDnsRecord()
         record.id = dict_record.get('id')
         record.type = dict_record.get('type')
@@ -51,14 +52,14 @@ class CloudflareDnsOps:
         record.proxied = dict_record.get('proxied', False)
         record.priority = dict_record.get('priority')
         record.zone_id = dict_record.get('zone_id')
-        record.zone_name = dict_record.get('zone_name')
 
-        record_name = remove_suffix(dict_record['name'], '.' + record.zone_name)
-        if record_name == record.zone_name:
+        record_name = remove_suffix(dict_record['name'], '.' + domain)
+        if record_name == domain:
             record_name = '@'
         record.name = record_name
         return record
 
+    @log_api_call
     def _get_zone_id(self, domain: str) -> str:
         params = {'name': domain}
         zones = self.cf.zones.get(params=params)
@@ -67,6 +68,7 @@ class CloudflareDnsOps:
         return zones[0]['id']
 
     # https://api.cloudflare.com/#dns-records-for-a-zone-create-dns-record
+    @log_api_call
     def add_domain_record(self, domain: str, record: CloudflareDnsRecord):
         if record.zone_id is None:
             record.zone_id = self._get_zone_id(domain)
@@ -81,6 +83,7 @@ class CloudflareDnsOps:
         return self.cf.zones.dns_records.post(record.zone_id, data=data)
 
     # https://api.cloudflare.com/#dns-records-for-a-zone-update-dns-record
+    @log_api_call
     def update_domain_record(self, domain: str, record: CloudflareDnsRecord):
         if record.zone_id is None:
             record.zone_id = self._get_zone_id(domain)
@@ -102,6 +105,7 @@ class CloudflareDnsOps:
         return self.cf.zones.dns_records.put(record.zone_id, record.id, data=data)
 
     # https://api.cloudflare.com/#dns-records-for-a-zone-delete-dns-record
+    @log_api_call
     def delete_domain_record(self, domain: str, record: CloudflareDnsRecord):
         if record.zone_id is None:
             record.zone_id = self._get_zone_id(domain)

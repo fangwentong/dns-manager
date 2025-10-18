@@ -39,6 +39,10 @@ class DnsRecord:
         self.value = value
         self.ttl = ttl
 
+    def __repr__(self) -> str:
+        return (f"DnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
+                f"value={self.value!r}, ttl={self.ttl!r})")
+
     def sprint_with_domain(self, domain: str) -> str:
         return '[{}] {}.{} -> {} TTL {}'.format(self.type, self.name, domain, self.value, self.ttl)
 
@@ -80,6 +84,11 @@ class CloudflareDnsRecord(DnsRecord):
         self.zone_id = zone_id
         self.zone_name = zone_name
 
+    def __repr__(self) -> str:
+        return (f"CloudflareDnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
+                f"value={self.value!r}, ttl={self.ttl!r}, proxied={self.proxied!r}, "
+                f"priority={self.priority!r})")
+
     def sprint_with_domain(self, domain: str) -> str:
         return '{}{}'.format(super().sprint_with_domain(domain), ' [proxied]' if self.proxied else '')
 
@@ -103,6 +112,10 @@ class NamecheapDnsRecord(DnsRecord):
     def __init__(self, id=None, name=None, type=None, value=None, ttl=None, mx_pref=None):
         super().__init__(id=id, name=name, type=type, value=value, ttl=ttl)
         self.mx_pref = mx_pref
+
+    def __repr__(self) -> str:
+        return (f"NamecheapDnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
+                f"value={self.value!r}, ttl={self.ttl!r}, mx_pref={self.mx_pref!r})")
 
     def sprint_with_domain(self, domain: str) -> str:
         return '{}{}'.format(super().sprint_with_domain(domain),
