@@ -1,14 +1,14 @@
 #!/usr/bin/env python
-# coding=utf-8
 
 import json
-from aliyunsdkcore import client
-from typing import List
+
+from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest import AddDomainRecordRequest
+from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
+from aliyunsdkalidns.request.v20150109.DescribeDomainRecordInfoRequest import DescribeDomainRecordInfoRequest
 from aliyunsdkalidns.request.v20150109.DescribeDomainRecordsRequest import DescribeDomainRecordsRequest
 from aliyunsdkalidns.request.v20150109.UpdateDomainRecordRequest import UpdateDomainRecordRequest
-from aliyunsdkalidns.request.v20150109.AddDomainRecordRequest import AddDomainRecordRequest
-from aliyunsdkalidns.request.v20150109.DescribeDomainRecordInfoRequest import DescribeDomainRecordInfoRequest
-from aliyunsdkalidns.request.v20150109.DeleteDomainRecordRequest import DeleteDomainRecordRequest
+from aliyunsdkcore import client
+
 from .model import DnsRecord
 from .utils import log_api_call
 
@@ -17,7 +17,7 @@ class AliyunDnsOps:
     def __init__(self, access_key_id, access_key_secret, region_id: str = 'cn-hangzhou'):
         self.clt = client.AcsClient(access_key_id, access_key_secret, region_id=region_id)
 
-    def get_domain_records(self, domain, rr, record_type) -> List[DnsRecord]:
+    def get_domain_records(self, domain, rr, record_type) -> list[DnsRecord]:
         page_no = 1
         result = []
         while True:

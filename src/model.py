@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-# coding=utf-8
-import typing
-from typing import List
 from .utils import remove_suffix
 
 CFG_KEY_CLIENTS = 'clients'
@@ -44,7 +41,7 @@ class DnsRecord:
                 f"value={self.value!r}, ttl={self.ttl!r})")
 
     def sprint_with_domain(self, domain: str) -> str:
-        return '[{}] {}.{} -> {} TTL {}'.format(self.type, self.name, domain, self.value, self.ttl)
+        return f'[{self.type}] {self.name}.{domain} -> {self.value} TTL {self.ttl}'
 
     def matches(self, other) -> bool:
         return self._matches(other)
@@ -56,11 +53,11 @@ class DnsRecord:
                and (bypass_ttl_check or self.ttl is None or other.ttl is None or self.ttl == other.ttl)
 
 
-def parse_dns_record_from_config(config: dict) -> List[DnsRecord]:
+def parse_dns_record_from_config(config: dict) -> list[DnsRecord]:
     name = config[CFG_KEY_DNS_RECORD_RR]
     type = config[CFG_KEY_DNS_RECORD_TYPE]
     raw_values = config[CFG_KEY_DNS_RECORD_VALUE]
-    values = raw_values if isinstance(raw_values, List) else [raw_values]
+    values = raw_values if isinstance(raw_values, list) else [raw_values]
     ttl = config.get(CFG_KEY_DNS_RECORD_TTL, DEFAULT_DNS_TTL)
     return [DnsRecord(name=name, type=type, value=value, ttl=ttl) for value in values]
 
@@ -97,7 +94,7 @@ class CloudflareDnsRecord(DnsRecord):
                and (self.priority is None or other.priority is None or self.priority == other.priority)
 
 
-def parse_cloudflare_dns_record_from_config(config: dict) -> List[CloudflareDnsRecord]:
+def parse_cloudflare_dns_record_from_config(config: dict) -> list[CloudflareDnsRecord]:
     records = parse_dns_record_from_config(config)
     proxied = config.get(CFG_KEY_DNS_RECORD_CF_PROXIED, False)
     priority = config.get(CFG_KEY_DNS_RECORD_CF_PRIORITY)
@@ -119,13 +116,13 @@ class NamecheapDnsRecord(DnsRecord):
 
     def sprint_with_domain(self, domain: str) -> str:
         return '{}{}'.format(super().sprint_with_domain(domain),
-                             ' mx_pref={}'.format(self.mx_pref) if self.mx_pref else '')
+                             f' mx_pref={self.mx_pref}' if self.mx_pref else '')
 
     def matches(self, other) -> bool:
         return super().matches(other) and self.mx_pref == other.mx_pref
 
 
-def parse_namecheap_dns_record_from_config(config: dict) -> List[NamecheapDnsRecord]:
+def parse_namecheap_dns_record_from_config(config: dict) -> list[NamecheapDnsRecord]:
     records = parse_dns_record_from_config(config)
     mx_pref = config.get(CFG_KEY_DNS_RECORD_NC_MX_PREF)
     return [NamecheapDnsRecord(id=record.id, name=record.name, type=record.type,

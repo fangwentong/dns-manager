@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-# coding=utf-8
+
 
 from namecheap import Api
+
 from .model import NamecheapDnsRecord
-from typing import List
 from .utils import log_api_call
 
 
@@ -12,7 +12,7 @@ class NamecheapDnsOps:
         self.api = Api(username, api_key, username, ip_address, sandbox=sandbox, debug=debug)
 
     @log_api_call
-    def get_domain_records(self, domain: str) -> List[NamecheapDnsRecord]:
+    def get_domain_records(self, domain: str) -> list[NamecheapDnsRecord]:
         records = self.api.domains_dns_getHosts(domain)
         return [self._convert_to_dns_record(record) for record in records]
 
