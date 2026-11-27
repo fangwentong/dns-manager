@@ -6,6 +6,7 @@ from typing import Any
 
 from .aliyun_dns_ops import build_aliyun_dns_client_from_config
 from .cloudflare_dns_ops import build_cloudflare_dns_client_from_config
+from .cloudflare_rest import CloudflareRestClient
 from .config_loader import load_dns_config
 from .model import (
     CFG_KEY_CLIENTS,
@@ -19,6 +20,7 @@ from .model import (
     parse_namecheap_dns_record_from_config,
 )
 from .namecheap_dns_ops import build_namecheap_dns_client_from_config
+from .planner import DomainPlan, format_plan, plan_domain_changes
 from .utils import remove_suffix
 
 
@@ -164,18 +166,64 @@ def _is_record_value_match_any(record: DnsRecord, record_type: str, values: list
     return False
 
 
-GUIDE_DOC = '''\
+def _build_readonly_cloudflare_client(config: dict) -> CloudflareRestClient:
+    return CloudflareRestClient(email=config.get("email"), token=config.get("token"))
+
+
+readonly_client_factories = {
+    "namecheap": build_namecheap_dns_client_from_config,
+    "aliyun": build_aliyun_dns_client_from_config,
+    "cloudflare": _build_readonly_cloudflare_client,
+}
+
+
+def build_readonly_dns_clients(clients_conf) -> Mapping[str, DnsProvider]:
+    clients_cfg = clients_conf.get(CFG_KEY_CLIENTS)
+    clients = {}
+    for vendor, factory in readonly_client_factories.items():
+        client_conf = clients_cfg.get(vendor)
+        if client_conf is not None:
+            record_parser = record_parsers.get(vendor, default_record_parser)
+            clients[vendor] = DnsProvider(client=factory(client_conf), record_parser=record_parser)
+    return clients
+
+
+def plan_dns_config(cfg_path: str) -> list[DomainPlan]:
+    """Read-only diff planning across all configured domains (no writes performed)."""
+    dns_conf = load_dns_config(cfg_path)
+    clients = build_readonly_dns_clients(dns_conf)
+    plans: list[DomainPlan] = []
+
+    for entry in dns_conf.get(CFG_KEY_DNS):
+        domain = entry.get(CFG_KEY_DNS_DOMAIN)
+        vendor = entry.get(CFG_KEY_DNS_VENDOR)
+        provider = clients[vendor]
+        online_records = provider.client.get_domain_records(domain)
+        desired_records: list[DnsRecord] = []
+        for raw_rec in entry.get(CFG_KEY_DNS_RECORDS):
+            desired_records.extend(provider.record_parser(raw_rec))
+        plan = plan_domain_changes(domain, vendor, desired_records, online_records)
+        plans.append(plan)
+        print(format_plan(plan))
+
+    return plans
+
+
+GUIDE_DOC = """\
 Usage:
-    dns-manager <command> [/path/to/dns/config]
+    dns-manager <command> [/path/to/dns/config] [--dry-run]
 
 Commands:
     status    show current dns status
-    update    load dns config from local, flush local config to name server
-'''
+    plan      show planned dns changes without modifying remote records (read-only)
+    update    load dns config from local, flush local config to name server (supports --dry-run)
+"""
 
 
-def main():
-    params = sys.argv[1:]
+def main(argv: list[str] | None = None):
+    params = sys.argv[1:] if argv is None else list(argv)
+    dry_run = "--dry-run" in params
+    params = [p for p in params if p != "--dry-run"]
 
     if len(params) < 2:
         print(GUIDE_DOC)
@@ -184,12 +232,14 @@ def main():
     command = params[0]
     cfg_path = params[1]
 
-    if command == 'update':
+    if command == "plan" or (command == "update" and dry_run):
+        plan_dns_config(cfg_path)
+    elif command == "update":
         load_and_update_dns_config(cfg_path)
-    elif command == 'status':
+    elif command == "status":
         show_online_config(cfg_path)
     else:
-        print('unknown command', command)
+        print("unknown command", command)
 
 
 if __name__ == '__main__':

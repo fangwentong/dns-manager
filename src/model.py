@@ -1,130 +1,174 @@
-#!/usr/bin/env python
+from __future__ import annotations
+
+import ipaddress
+from dataclasses import dataclass
+from typing import Any
+
 from .utils import remove_suffix
 
-CFG_KEY_CLIENTS = 'clients'
+CFG_KEY_CLIENTS = "clients"
 
-CFG_KEY_DNS = 'dns'
-CFG_KEY_DNS_DOMAIN = 'domain'
-CFG_KEY_DNS_VENDOR = 'vendor'
-CFG_KEY_DNS_RECORDS = 'records'
-CFG_KEY_DNS_RECORD_RR = 'rr'
-CFG_KEY_DNS_RECORD_TYPE = 'type'
-CFG_KEY_DNS_RECORD_VALUE = 'value'
-CFG_KEY_DNS_RECORD_TTL = 'ttl'
+CFG_KEY_DNS = "dns"
+CFG_KEY_DNS_DOMAIN = "domain"
+CFG_KEY_DNS_VENDOR = "vendor"
+CFG_KEY_DNS_RECORDS = "records"
+CFG_KEY_DNS_RECORD_RR = "rr"
+CFG_KEY_DNS_RECORD_TYPE = "type"
+CFG_KEY_DNS_RECORD_VALUE = "value"
+CFG_KEY_DNS_RECORD_TTL = "ttl"
 
 # Cloudflare DNS
-CFG_KEY_DNS_RECORD_CF_PROXIED = 'proxied'
-CFG_KEY_DNS_RECORD_CF_PRIORITY = 'priority'
+CFG_KEY_DNS_RECORD_CF_PROXIED = "proxied"
+CFG_KEY_DNS_RECORD_CF_PRIORITY = "priority"
 
 # Namecheap DNS
-CFG_KEY_DNS_RECORD_NC_MX_PREF = 'mx_pref'
+CFG_KEY_DNS_RECORD_NC_MX_PREF = "mx_pref"
 
 DEFAULT_DNS_TTL = 300
+TRAILING_DOT_TYPES = frozenset({"CNAME", "NS", "MX", "ALIAS"})
 
 
+def parse_optional_int(val: Any) -> int | None:
+    if val is None or val == "":
+        return None
+    if isinstance(val, bool):
+        raise ValueError(f"Expected integer, got bool: {val!r}")
+    return int(val)
+
+
+def normalize_record_value(record_type: str, value: str) -> str:
+    val = str(value).strip()
+    rtype = record_type.upper()
+    if rtype in TRAILING_DOT_TYPES:
+        return remove_suffix(val, ".").lower()
+    if rtype == "AAAA":
+        try:
+            return str(ipaddress.IPv6Address(val))
+        except ValueError:
+            return val.lower()
+    return val
+
+
+@dataclass
 class DnsRecord:
-    id = None
-    name = str
-    type = str
-    value = str
-    ttl = int
+    id: str | None = None
+    name: str = ""
+    type: str = ""
+    value: str = ""
+    ttl: int | None = None
 
-    def __init__(self, id=None, name=None, type=None, value=None, ttl=None):
-        self.id = id
-        self.name = name
-        self.type = type
-        self.value = value
-        self.ttl = ttl
+    def __post_init__(self) -> None:
+        self.name = str(self.name).strip().lower() if self.name is not None else ""
+        self.type = str(self.type).strip().upper() if self.type is not None else ""
+        self.value = str(self.value).strip() if self.value is not None else ""
+        self.ttl = parse_optional_int(self.ttl)
 
-    def __repr__(self) -> str:
-        return (f"DnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
-                f"value={self.value!r}, ttl={self.ttl!r})")
+    def normalized_value(self) -> str:
+        return normalize_record_value(self.type, self.value)
 
     def sprint_with_domain(self, domain: str) -> str:
-        return f'[{self.type}] {self.name}.{domain} -> {self.value} TTL {self.ttl}'
+        return f"[{self.type}] {self.name}.{domain} -> {self.value} TTL {self.ttl}"
 
-    def matches(self, other) -> bool:
+    def matches(self, other: DnsRecord) -> bool:
         return self._matches(other)
 
-    def _matches(self, other, bypass_ttl_check=False) -> bool:
-        return self.name == other.name and self.type == other.type \
-               and (self.value == other.value or self.type == 'CNAME'
-                    and remove_suffix(self.value, '.') == remove_suffix(other.value, '.')) \
-               and (bypass_ttl_check or self.ttl is None or other.ttl is None or self.ttl == other.ttl)
+    def _matches(self, other: DnsRecord, bypass_ttl_check: bool = False) -> bool:
+        return (
+            self.name == other.name
+            and self.type == other.type
+            and self.normalized_value() == other.normalized_value()
+            and (bypass_ttl_check or self.ttl is None or other.ttl is None or self.ttl == other.ttl)
+        )
 
 
-def parse_dns_record_from_config(config: dict) -> list[DnsRecord]:
+def parse_dns_record_from_config(config: dict[str, Any]) -> list[DnsRecord]:
     name = config[CFG_KEY_DNS_RECORD_RR]
-    type = config[CFG_KEY_DNS_RECORD_TYPE]
+    rec_type = config[CFG_KEY_DNS_RECORD_TYPE]
     raw_values = config[CFG_KEY_DNS_RECORD_VALUE]
     values = raw_values if isinstance(raw_values, list) else [raw_values]
     ttl = config.get(CFG_KEY_DNS_RECORD_TTL, DEFAULT_DNS_TTL)
-    return [DnsRecord(name=name, type=type, value=value, ttl=ttl) for value in values]
+    return [DnsRecord(name=name, type=rec_type, value=value, ttl=ttl) for value in values]
 
 
+@dataclass
 class CloudflareDnsRecord(DnsRecord):
-    """
-    DNS record type for CloudFlare DNS
-    """
-    proxiable: bool
-    proxied: bool
-    priority = int
-    zone_id: str
-    zone_name: str
+    """DNS record type for Cloudflare DNS."""
 
-    def __init__(self, id=None, name=None, type=None, value=None, ttl=None, proxiable=None,
-                 proxied=None, priority=None, zone_id=None, zone_name=None):
-        super().__init__(id=id, name=name, type=type, value=value, ttl=ttl)
-        self.proxiable = proxiable
-        self.proxied = proxied
-        self.priority = priority
-        self.zone_id = zone_id
-        self.zone_name = zone_name
+    proxiable: bool | None = None
+    proxied: bool = False
+    priority: int | None = None
+    zone_id: str | None = None
+    zone_name: str | None = None
 
-    def __repr__(self) -> str:
-        return (f"CloudflareDnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
-                f"value={self.value!r}, ttl={self.ttl!r}, proxied={self.proxied!r}, "
-                f"priority={self.priority!r})")
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.proxied = bool(self.proxied) if self.proxied is not None else False
+        self.priority = parse_optional_int(self.priority)
 
     def sprint_with_domain(self, domain: str) -> str:
-        return '{}{}'.format(super().sprint_with_domain(domain), ' [proxied]' if self.proxied else '')
+        suffix = " [proxied]" if self.proxied else ""
+        return f"{super().sprint_with_domain(domain)}{suffix}"
 
-    def matches(self, other) -> bool:
-        return self.proxied == other.proxied and super()._matches(other, bypass_ttl_check=self.proxied) \
-               and (self.priority is None or other.priority is None or self.priority == other.priority)
+    def matches(self, other: DnsRecord) -> bool:
+        if not isinstance(other, CloudflareDnsRecord):
+            return super().matches(other)
+        return (
+            self.proxied == other.proxied
+            and super()._matches(other, bypass_ttl_check=self.proxied)
+            and (self.priority is None or other.priority is None or self.priority == other.priority)
+        )
 
 
-def parse_cloudflare_dns_record_from_config(config: dict) -> list[CloudflareDnsRecord]:
+def parse_cloudflare_dns_record_from_config(config: dict[str, Any]) -> list[CloudflareDnsRecord]:
     records = parse_dns_record_from_config(config)
-    proxied = config.get(CFG_KEY_DNS_RECORD_CF_PROXIED, False)
+    proxied = bool(config.get(CFG_KEY_DNS_RECORD_CF_PROXIED, False))
     priority = config.get(CFG_KEY_DNS_RECORD_CF_PRIORITY)
-    return [CloudflareDnsRecord(id=record.id, name=record.name, type=record.type,
-                                value=record.value, ttl=record.ttl,
-                                proxied=proxied, priority=priority) for record in records]
+    return [
+        CloudflareDnsRecord(
+            id=record.id,
+            name=record.name,
+            type=record.type,
+            value=record.value,
+            ttl=record.ttl,
+            proxied=proxied,
+            priority=priority,
+        )
+        for record in records
+    ]
 
 
+@dataclass
 class NamecheapDnsRecord(DnsRecord):
-    mx_pref: int
+    mx_pref: int | None = None
 
-    def __init__(self, id=None, name=None, type=None, value=None, ttl=None, mx_pref=None):
-        super().__init__(id=id, name=name, type=type, value=value, ttl=ttl)
-        self.mx_pref = mx_pref
-
-    def __repr__(self) -> str:
-        return (f"NamecheapDnsRecord(id={self.id!r}, name={self.name!r}, type={self.type!r}, "
-                f"value={self.value!r}, ttl={self.ttl!r}, mx_pref={self.mx_pref!r})")
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.mx_pref = parse_optional_int(self.mx_pref)
 
     def sprint_with_domain(self, domain: str) -> str:
-        return '{}{}'.format(super().sprint_with_domain(domain),
-                             f' mx_pref={self.mx_pref}' if self.mx_pref else '')
+        suffix = f" mx_pref={self.mx_pref}" if self.mx_pref is not None else ""
+        return f"{super().sprint_with_domain(domain)}{suffix}"
 
-    def matches(self, other) -> bool:
-        return super().matches(other) and self.mx_pref == other.mx_pref
+    def matches(self, other: DnsRecord) -> bool:
+        if not isinstance(other, NamecheapDnsRecord):
+            return super().matches(other)
+        mx_match = True
+        if self.type == "MX" or other.type == "MX":
+            mx_match = self.mx_pref is None or other.mx_pref is None or self.mx_pref == other.mx_pref
+        return super().matches(other) and mx_match
 
 
-def parse_namecheap_dns_record_from_config(config: dict) -> list[NamecheapDnsRecord]:
+def parse_namecheap_dns_record_from_config(config: dict[str, Any]) -> list[NamecheapDnsRecord]:
     records = parse_dns_record_from_config(config)
     mx_pref = config.get(CFG_KEY_DNS_RECORD_NC_MX_PREF)
-    return [NamecheapDnsRecord(id=record.id, name=record.name, type=record.type,
-                               value=record.value, ttl=record.ttl,
-                               mx_pref=mx_pref) for record in records]
+    return [
+        NamecheapDnsRecord(
+            id=record.id,
+            name=record.name,
+            type=record.type,
+            value=record.value,
+            ttl=record.ttl,
+            mx_pref=mx_pref,
+        )
+        for record in records
+    ]

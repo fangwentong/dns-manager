@@ -17,16 +17,29 @@ class AliyunDnsOps:
     def __init__(self, access_key_id, access_key_secret, region_id: str = 'cn-hangzhou'):
         self.clt = client.AcsClient(access_key_id, access_key_secret, region_id=region_id)
 
-    def get_domain_records(self, domain, rr, record_type) -> list[DnsRecord]:
+    def get_domain_records(
+        self,
+        domain: str,
+        rr: str | None = None,
+        record_type: str | None = None,
+    ) -> list[DnsRecord]:
         page_no = 1
         result = []
         while True:
             res = self._get_domain_records_by_page(domain, rr, record_type, page_no)
-            result += res.get('DomainRecords').get('Record')
+            records = (res.get("DomainRecords") or {}).get("Record") or []
+            result += records
             if self.no_more(res):
                 break
             page_no = page_no + 1
-        return [self._convert_to_dns_record(record) for record in result]
+        converted = [self._convert_to_dns_record(record) for record in result]
+        # Aliyun RRKeyWord performs substring matching (e.g. "blog" matches "blog2"); filter strictly.
+        if rr is not None:
+            converted = [r for r in converted if r.name == rr]
+        if record_type is not None:
+            want_type = record_type.upper()
+            converted = [r for r in converted if r.type == want_type]
+        return converted
 
     @staticmethod
     def _convert_to_dns_record(dict_record) -> DnsRecord:
