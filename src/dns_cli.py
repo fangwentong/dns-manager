@@ -1,44 +1,55 @@
 #!/usr/bin/env python
-# coding=utf-8
-
-from __future__ import print_function
-from typing import Callable, Mapping, List
 
 import sys
-import yaml
-from .namecheap_dns_ops import build_namecheap_dns_client_from_config
+from collections.abc import Callable, Mapping
+from typing import Any
+
 from .aliyun_dns_ops import build_aliyun_dns_client_from_config
 from .cloudflare_dns_ops import build_cloudflare_dns_client_from_config
-from .model import *
+from .config_loader import load_dns_config
+from .model import (
+    CFG_KEY_CLIENTS,
+    CFG_KEY_DNS,
+    CFG_KEY_DNS_DOMAIN,
+    CFG_KEY_DNS_RECORDS,
+    CFG_KEY_DNS_VENDOR,
+    DnsRecord,
+    parse_cloudflare_dns_record_from_config,
+    parse_dns_record_from_config,
+    parse_namecheap_dns_record_from_config,
+)
+from .namecheap_dns_ops import build_namecheap_dns_client_from_config
 from .utils import remove_suffix
 
 
 class DnsProvider:
-    client = any
-    record_parser = Callable[[dict], List[DnsRecord]]
+    client: Any
+    record_parser: Callable[[dict], list[DnsRecord]]
 
-    def __init__(self, client: any,
-                 record_parser: Callable[[dict], List[DnsRecord]] = parse_dns_record_from_config):
+    def __init__(
+        self,
+        client: Any,
+        record_parser: Callable[[dict], list[DnsRecord]] = parse_dns_record_from_config,
+    ):
         self.client = client
         self.record_parser = record_parser
 
 
 client_factories = {
-    'namecheap': build_namecheap_dns_client_from_config,
-    'aliyun': build_aliyun_dns_client_from_config,
-    'cloudflare': build_cloudflare_dns_client_from_config,
+    "namecheap": build_namecheap_dns_client_from_config,
+    "aliyun": build_aliyun_dns_client_from_config,
+    "cloudflare": build_cloudflare_dns_client_from_config,
 }
 
 default_record_parser = parse_dns_record_from_config
 record_parsers = {
-    'namecheap': parse_namecheap_dns_record_from_config,
-    'cloudflare': parse_cloudflare_dns_record_from_config,
+    "namecheap": parse_namecheap_dns_record_from_config,
+    "cloudflare": parse_cloudflare_dns_record_from_config,
 }
 
 
 def load_namecheap_conf(path):
-    with open(path) as fp:
-        return yaml.load(fp, Loader=yaml.FullLoader)
+    return load_dns_config(path)
 
 
 def build_dns_clients(clients_conf) -> Mapping[str, DnsProvider]:
@@ -77,19 +88,21 @@ def load_and_update_dns_config(cfg_path):
                 if value_match_record is None:  # value not exist, create it
                     for same_name_record in same_name_records:  # resolve conflict record first
                         if has_conflict(same_name_record, record):
-                            print('try delete old record due to conflict {}'
-                                  .format(same_name_record.sprint_with_domain(domain)))
+                            print(f'try delete old record due to conflict {same_name_record.sprint_with_domain(domain)}'
+                                  )
                             client.client.delete_domain_record(domain, same_name_record)
                             if record.type == same_name_record.type:
                                 reserve_set.append(same_name_record.value)
-                    print('try add record {}'.format(record.sprint_with_domain(domain)))
+                    print(f'try add record {record.sprint_with_domain(domain)}')
                     print(client.client.add_domain_record(domain, record))
                 elif not value_match_record.matches(record):
-                    print('try update record {} => {}'.format(value_match_record.sprint_with_domain(domain),
-                                                              record.sprint_with_domain(domain)))
+                    print(
+                        f"try update record {value_match_record.sprint_with_domain(domain)} "
+                        f"=> {record.sprint_with_domain(domain)}"
+                    )
                     print(client.client.update_domain_record(domain, record))
 
-                print('status now {}'.format(record.sprint_with_domain(domain)))
+                print(f'status now {record.sprint_with_domain(domain)}')
 
             # delete record which record's value not present at config file
             for record in records:
@@ -98,7 +111,7 @@ def load_and_update_dns_config(cfg_path):
                     # delete records no longer needed
                     for matches_record in matches_records:
                         if matches_record.value not in reserve_set:
-                            print('try delete old record {}'.format(matches_record.sprint_with_domain(domain)))
+                            print(f'try delete old record {matches_record.sprint_with_domain(domain)}')
                             client.client.delete_domain_record(domain, matches_record)
                     online_records = client.client.get_domain_records(domain)
 
@@ -124,10 +137,10 @@ def show_online_config(cfg_path):
 def _print_matches_records(records, domain, rr, record_type):
     matches_records = _find_matches_records(records, rr, record_type)
     if not matches_records:
-        print('status now [{}] {}.{} -> nil'.format(record_type, rr, domain))
+        print(f'status now [{record_type}] {rr}.{domain} -> nil')
 
     for record in matches_records:
-        print('status now {}'.format(record.sprint_with_domain(domain)))
+        print(f'status now {record.sprint_with_domain(domain)}')
 
 
 def has_conflict(old_record: DnsRecord, new_record: DnsRecord) -> bool:
@@ -138,12 +151,12 @@ def has_conflict(old_record: DnsRecord, new_record: DnsRecord) -> bool:
     return new_record.type == old_record.type and new_record.value == old_record.value
 
 
-def _find_matches_records(records, rr, record_type=None) -> List[DnsRecord]:
+def _find_matches_records(records, rr, record_type=None) -> list[DnsRecord]:
     return [record for record in records if record.name == rr
             and (record_type is None or record.type == record_type)]
 
 
-def _is_record_value_match_any(record: DnsRecord, record_type: str, values: List[str]):
+def _is_record_value_match_any(record: DnsRecord, record_type: str, values: list[str]):
     if record.value in values:
         return True
     if record_type == 'CNAME':

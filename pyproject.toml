@@ -1,20 +1,26 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=69.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dns-manager"
 dynamic = ["version"]
-authors = [
-  { name="fangwentong", email="fangwentong2012@gmail.com" },
-]
+description = "Command line tool for declarative multi-vendor DNS management"
+readme = "README.md"
+authors = [{ name = "fangwentong", email = "fangwentong2012@gmail.com" }]
 license = { file = "LICENSE" }
-requires-python = ">=3.7"
+requires-python = ">=3.10"
 dependencies = [
     "PyNamecheap==0.0.3",
-    "aliyun-python-sdk-alidns==2.0.6",
-    "cloudflare==2.8.15",
-    "PyYAML==6.0.1"
+    "aliyun-python-sdk-alidns>=2.0.6,<3.0",
+    "cloudflare>=2.8.15,<3.0",
+    "PyYAML>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "ruff==0.17.6",
 ]
 
 [project.scripts]
@@ -22,7 +28,22 @@ dns-manager = "dns_manager.dns_cli:main"
 
 [tool.setuptools]
 packages = ["dns_manager"]
-package-dir = {"dns_manager" = "src"}
+package-dir = { "dns_manager" = "src" }
 
 [tool.setuptools.dynamic]
-version = {attr = "dns_manager.__version__"}
+version = { attr = "dns_manager.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dns_manager"]
