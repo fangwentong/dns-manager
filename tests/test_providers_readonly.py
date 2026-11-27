@@ -150,7 +150,7 @@ dns:
     )
     fake_client = MagicMock()
     fake_client.get_domain_records.return_value = [DnsRecord(id="1", name="www", type="A", value="9.9.9.9", ttl=300)]
-    monkeypatch.setitem(dns_cli.readonly_client_factories, "aliyun", lambda _c: fake_client)
+    monkeypatch.setitem(dns_cli.client_factories, "aliyun", lambda _c: fake_client)
 
     dns_cli.main(["update", str(cfg), "--dry-run"])
     fake_client.get_domain_records.assert_called_once_with("example.com")

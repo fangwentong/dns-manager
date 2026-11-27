@@ -13,7 +13,6 @@ requires-python = ">=3.10"
 dependencies = [
     "PyNamecheap==0.0.3",
     "aliyun-python-sdk-alidns>=2.0.6,<3.0",
-    "cloudflare>=2.8.15,<3.0",
     "PyYAML>=6.0,<7.0",
     "requests>=2.31.0,<3.0",
 ]

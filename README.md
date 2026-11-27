@@ -1,64 +1,56 @@
-DNS Manager
----
+# DNS Manager
 
-DNS Manager is a Python command-line tool for managing DNS records across multiple vendors. It can load DNS
-configurations from a local file and update the DNS records on the name server.
+DNS Manager is a Python command-line tool for declarative DNS record management across multiple vendors (Cloudflare, Alibaba Cloud / Aliyun, and Namecheap).
 
 ## Install
 
-This program requires Python 3.
+Requires Python 3.10+.
 
-
-### From GitHub (Latest)
-
-To install the latest development version directly from GitHub, run:
-
-```
-pip install https://github.com/fangwentong/dns-manager/archive/master.zip
+```bash
+pip install git+https://github.com/fangwentong/dns-manager.git
 ```
 
 ## Usage
 
-```
-dns-manager <command> [/path/to/dns/config]
+```bash
+dns-manager <command> /path/to/dns.yml [--dry-run]
 ```
 
 ### Commands
 
-- `status` - show current DNS status
-- `update` - load DNS config from a local file and flush local config to the name server
+- `status` — show current remote DNS records for all managed `(rr, type)` entries
+- `plan` — compute and print the exact diff (`DELETE conflict` → `CREATE`/`UPDATE` → `DELETE stale`) without modifying remote records
+- `update` — plan and apply changes to the DNS provider (pass `--dry-run` to behave identically to `plan`)
 
-```
-$ dns-manager
-
-Usage:
-    dns-manager <command> [/path/to/dns/config]
-
-Commands:
-    status    show current dns status
-    update    load dns config from local, flush local config to name server
-
-
-$ dns-manager status dns_sample.yml
-
-status now [A] @.example.com -> 93.184.216.34
-status now [A] www.example.com -> 93.184.216.34
-status now [A] plus.example.com -> nil
+```bash
+$ dns-manager plan conf/dns_sample.yml
+=== example.com (cloudflare) ===
+  + CREATE: [A] www.example.com -> 93.184.216.34 TTL 300
+  (1 change(s), 2 unmanaged record(s) preserved)
 ```
 
-### DNS Configuration File
+### Configuration File
 
-DNS Manager requires a DNS configuration file in YAML format. An example of the file format is provided in
-the [dns_sample.yml](conf/dns_sample.yml) file.
+See [conf/dns_sample.yml](conf/dns_sample.yml) for a full YAML example.
 
-### Supported DNS vendors
+- Credentials under `clients` support `${ENV_VAR}` interpolation (missing env vars fail fast before any API call).
+- **Cloudflare** supports scoped API Tokens (`token` only, sent as `Authorization: Bearer <token>`) as well as legacy Global API Keys (`email` + `token`, sent via `X-Auth-Email` / `X-Auth-Key`).
+- **Namecheap** uses zone-level `domains.dns.setHosts` replacement while preserving all unmanaged records (including `URL`, `URL301`, `FRAME`, `SRV`, etc.) verbatim from `getHosts`.
 
-The following DNS vendors are supported:
+### Supported DNS Vendors
 
+- Cloudflare (direct v4 REST API via `requests`)
+- Alibaba Cloud (Aliyun DNS)
 - Namecheap
-- Alibaba Cloud (Aliyun)
-- Cloudflare
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+pytest -v
+```
 
 ## License
 
-This program is licensed under the MIT License. Please see the [LICENSE](LICENSE) file for details.
+This program is licensed under the MIT License. See [LICENSE](LICENSE) for details.

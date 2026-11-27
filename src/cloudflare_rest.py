@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
@@ -145,3 +146,58 @@ class CloudflareRestClient:
             priority=dict_record.get("priority"),
             zone_id=dict_record.get("zone_id"),
         )
+
+    @staticmethod
+    def _build_record_payload(domain: str, record: CloudflareDnsRecord, *, is_update: bool = False) -> dict[str, Any]:
+        fqdn = domain if record.name == "@" else f"{record.name}.{domain}"
+        effective_proxied = bool(record.proxied) if record.proxied is not None else False
+        # Cloudflare requires ttl=1 (Automatic) whenever proxied=True.
+        ttl = 1 if effective_proxied else (record.ttl if record.ttl is not None else 1)
+        payload: dict[str, Any] = {
+            "name": fqdn,
+            "type": record.type,
+            "content": record.value,
+            "ttl": ttl,
+        }
+        if record.proxied is not None:
+            payload["proxied"] = bool(record.proxied)
+        elif not is_update:
+            payload["proxied"] = False
+        if record.priority is not None:
+            payload["priority"] = record.priority
+        return payload
+
+    @log_api_call
+    def add_domain_record(self, domain: str, record: CloudflareDnsRecord) -> dict[str, Any]:
+        zone_id = record.zone_id or self.get_zone_id(domain)
+        payload = self._build_record_payload(domain, record, is_update=False)
+        resp = self._request("POST", f"/zones/{zone_id}/dns_records", json_body=payload)
+        return resp.get("result") or {}
+
+    @log_api_call
+    def update_domain_record(self, domain: str, record: CloudflareDnsRecord) -> dict[str, Any]:
+        if not record.id:
+            raise CloudflareAPIError(f"Cannot update Cloudflare DNS record without record.id: {record}")
+        zone_id = record.zone_id or self.get_zone_id(domain)
+        payload = self._build_record_payload(domain, record, is_update=True)
+        # PATCH preserves existing Cloudflare metadata (comment, tags, per-record settings).
+        resp = self._request("PATCH", f"/zones/{zone_id}/dns_records/{record.id}", json_body=payload)
+        return resp.get("result") or {}
+
+    @log_api_call
+    def delete_domain_record(self, domain: str, record: CloudflareDnsRecord) -> dict[str, Any]:
+        if not record.id:
+            raise CloudflareAPIError(f"Cannot delete Cloudflare DNS record without record.id: {record}")
+        zone_id = record.zone_id or self.get_zone_id(domain)
+        resp = self._request("DELETE", f"/zones/{zone_id}/dns_records/{record.id}")
+        return resp.get("result") or {}
+
+
+def build_cloudflare_dns_client_from_config(config: dict[str, Any]) -> CloudflareRestClient:
+    for legacy_key in ("certtoken", "debug"):
+        if config.get(legacy_key) is not None:
+            logging.warning(
+                "Cloudflare config option '%s' is ignored by the v0.2.0 REST client (legacy SDK removed).",
+                legacy_key,
+            )
+    return CloudflareRestClient(email=config.get("email"), token=config.get("token"))
