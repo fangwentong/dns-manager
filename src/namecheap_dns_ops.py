@@ -12,20 +12,24 @@ class NamecheapDnsOps:
         self.api = Api(username, api_key, username, ip_address, sandbox=sandbox, debug=debug)
 
     @log_api_call
+    def get_raw_domain_records(self, domain: str) -> list[dict]:
+        return list(self.api.domains_dns_getHosts(domain))
+
+    @log_api_call
     def get_domain_records(self, domain: str) -> list[NamecheapDnsRecord]:
-        records = self.api.domains_dns_getHosts(domain)
+        records = self.get_raw_domain_records(domain)
         return [self._convert_to_dns_record(record) for record in records]
 
     @staticmethod
     def _convert_to_dns_record(dict_record: dict) -> NamecheapDnsRecord:
-        record = NamecheapDnsRecord()
-        record.id = dict_record['HostId']
-        record.name = dict_record['Name']
-        record.type = dict_record['Type']
-        record.value = dict_record['Address']
-        record.ttl = dict_record['TTL']
-        record.mx_pref = dict_record.get('MXPref', None)
-        return record
+        return NamecheapDnsRecord(
+            id=dict_record.get("HostId"),
+            name=dict_record["Name"],
+            type=dict_record["Type"],
+            value=dict_record["Address"],
+            ttl=dict_record.get("TTL"),
+            mx_pref=dict_record.get("MXPref"),
+        )
 
     # https://www.namecheap.com/support/api/methods/domains-dns/set-hosts/
     @log_api_call
