@@ -23,6 +23,7 @@ class DomainPlan:
     vendor: str
     changes: list[RecordChange]
     unmanaged_records: list[DnsRecord]
+    unmanaged_indices: tuple[int, ...] = ()
 
     @property
     def has_changes(self) -> bool:
@@ -104,9 +105,13 @@ def plan_domain_changes(
                 existing = key_online[match_idx]
                 if not existing.matches(desired):
                     updated = replace(desired, id=existing.id)
+                    if updated.line is None and existing.line is not None:
+                        updated = replace(updated, line=existing.line)
                     if isinstance(updated, CloudflareDnsRecord) and isinstance(existing, CloudflareDnsRecord):
                         if updated.zone_id is None:
                             updated = replace(updated, zone_id=existing.zone_id)
+                        if updated.proxied is None:
+                            updated = replace(updated, proxied=existing.proxied)
                     creates_and_updates.append(
                         RecordChange(action="update", domain=domain, desired=updated, existing=existing)
                     )
@@ -115,8 +120,8 @@ def plan_domain_changes(
             if i not in matched_online_indices:
                 delete_stales.append(RecordChange(action="delete_stale", domain=domain, existing=candidate))
 
-    unmanaged = [
-        rec
+    unmanaged_pairs = [
+        (idx, rec)
         for idx, rec in enumerate(online_records)
         if (rec.name, rec.type) not in managed_keys and idx not in conflict_ids
     ]
@@ -125,7 +130,8 @@ def plan_domain_changes(
         domain=domain,
         vendor=vendor,
         changes=[*delete_conflicts, *creates_and_updates, *delete_stales],
-        unmanaged_records=unmanaged,
+        unmanaged_records=[rec for _, rec in unmanaged_pairs],
+        unmanaged_indices=tuple(idx for idx, _ in unmanaged_pairs),
     )
 
 

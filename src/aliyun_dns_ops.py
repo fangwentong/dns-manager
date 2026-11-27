@@ -49,6 +49,7 @@ class AliyunDnsOps:
         record.type = dict_record['Type']
         record.value = dict_record['Value']
         record.ttl = dict_record['TTL']
+        record.line = dict_record.get('Line')
         return record
 
     @log_api_call
@@ -82,11 +83,17 @@ class AliyunDnsOps:
     # https://help.aliyun.com/document_detail/29774.html
     @log_api_call
     def update_domain_record(self, domain: str, record: DnsRecord):
+        if not record.id:
+            raise ValueError(f"Cannot update Aliyun DNS record without record.id: {record}")
         request = UpdateDomainRecordRequest()
         request.set_RecordId(record.id)
         request.set_RR(record.name)
         request.set_Type(record.type)
         request.set_Value(record.value)
+        if record.ttl is not None:
+            request.set_TTL(record.ttl)
+        if record.line:
+            request.set_Line(record.line)
         request.set_accept_format('JSON')
         return json.loads(self.clt.do_action_with_exception(request))
 
@@ -104,6 +111,8 @@ class AliyunDnsOps:
 
     @log_api_call
     def delete_domain_record(self, domain, record: DnsRecord):
+        if not record.id:
+            raise ValueError(f"Cannot delete Aliyun DNS record without record.id: {record}")
         request = DeleteDomainRecordRequest()
         request.set_DomainName(domain)
         request.set_RecordId(record.id)

@@ -56,6 +56,7 @@ class DnsRecord:
     type: str = ""
     value: str = ""
     ttl: int | None = None
+    line: str | None = None
 
     def __post_init__(self) -> None:
         self.name = str(self.name).strip().lower() if self.name is not None else ""
@@ -95,14 +96,14 @@ class CloudflareDnsRecord(DnsRecord):
     """DNS record type for Cloudflare DNS."""
 
     proxiable: bool | None = None
-    proxied: bool = False
+    proxied: bool | None = None
     priority: int | None = None
     zone_id: str | None = None
     zone_name: str | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        self.proxied = bool(self.proxied) if self.proxied is not None else False
+        self.proxied = bool(self.proxied) if self.proxied is not None else None
         self.priority = parse_optional_int(self.priority)
 
     def sprint_with_domain(self, domain: str) -> str:
@@ -112,16 +113,19 @@ class CloudflareDnsRecord(DnsRecord):
     def matches(self, other: DnsRecord) -> bool:
         if not isinstance(other, CloudflareDnsRecord):
             return super().matches(other)
+        proxied_match = self.proxied is None or other.proxied is None or self.proxied == other.proxied
+        effective_proxied = bool(other.proxied) if other.proxied is not None else bool(self.proxied)
         return (
-            self.proxied == other.proxied
-            and super()._matches(other, bypass_ttl_check=self.proxied)
+            proxied_match
+            and super()._matches(other, bypass_ttl_check=effective_proxied)
             and (self.priority is None or other.priority is None or self.priority == other.priority)
         )
 
 
 def parse_cloudflare_dns_record_from_config(config: dict[str, Any]) -> list[CloudflareDnsRecord]:
     records = parse_dns_record_from_config(config)
-    proxied = bool(config.get(CFG_KEY_DNS_RECORD_CF_PROXIED, False))
+    raw_proxied = config.get(CFG_KEY_DNS_RECORD_CF_PROXIED)
+    proxied = bool(raw_proxied) if raw_proxied is not None else None
     priority = config.get(CFG_KEY_DNS_RECORD_CF_PRIORITY)
     return [
         CloudflareDnsRecord(
